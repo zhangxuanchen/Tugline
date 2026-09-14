@@ -40,6 +40,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/login").permitAll()
+                        .requestMatchers("/api/auth/captcha").permitAll()
                         .requestMatchers("/api/webhook/**").permitAll()
                         .requestMatchers(STATIC_RESOURCES).permitAll()
                         .anyRequest().authenticated())

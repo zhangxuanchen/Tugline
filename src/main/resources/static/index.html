@@ -315,6 +315,13 @@
       <span>密码</span>
       <input id="login-password" type="password" autocomplete="current-password" required/>
     </label>
+    <label class="login-field">
+      <span>验证码</span>
+      <div class="captcha-row">
+        <input id="login-captcha" autocomplete="off" maxlength="4" required/>
+        <img id="login-captcha-img" alt="验证码" title="看不清？点击刷新"/>
+      </div>
+    </label>
     <div id="login-error" class="login-error" style="display:none"></div>
     <button type="submit" id="login-submit" class="btn btn-primary btn-block">登 录</button>
   </form>

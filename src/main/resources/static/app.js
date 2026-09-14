@@ -45,10 +45,23 @@
     $('#login-mask').style.display = 'flex';
     $('#user-menu').style.display = 'none';
     $('#user-dropdown').style.display = 'none';
+    loadCaptcha();
     if (state.timer) {
       clearInterval(state.timer);
       state.timer = null;
     }
+  }
+
+  /** 拉取登录验证码（SVG 直接渲染进 img） */
+  let captchaId = '';
+  async function loadCaptcha() {
+    try {
+      const res = await fetch('/api/auth/captcha');
+      const data = await res.json();
+      captchaId = data.captchaId;
+      $('#login-captcha-img').src = 'data:image/svg+xml,' + encodeURIComponent(data.svg);
+      $('#login-captcha').value = '';
+    } catch (_) { /* 页面加载时验证码失败，点图片可重试 */ }
   }
 
   /** 登录成功后展示右上角用户管理 */
@@ -68,10 +81,13 @@
         body: JSON.stringify({
           username: $('#login-username').value.trim(),
           password: $('#login-password').value,
+          captchaId: captchaId,
+          captchaCode: $('#login-captcha').value,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        loadCaptcha();
         throw new Error(data.error || '登录失败');
       }
       localStorage.setItem('tugline.token', data.token);
@@ -604,6 +620,7 @@
     });
 
     $('#login-form').addEventListener('submit', doLogin);
+    $('#login-captcha-img').addEventListener('click', loadCaptcha);
     $('#btn-logout').onclick = logout;
     if (getToken()) {
       api('/api/auth/me').then((me) => {

@@ -345,6 +345,41 @@
     localStorage.setItem('tugline.agentCollapsed', collapsed ? '1' : '');
   }
 
+  // ---------- 拖拽调宽 ----------
+
+  function setupResizer() {
+    const sidebar = $('#agent-sidebar');
+    const resizer = $('#agent-resizer');
+    const KEY = 'tugline.agentWidth';
+    const MIN = 300;
+    const saved = parseInt(localStorage.getItem(KEY) || '', 10);
+    if (saved >= MIN) sidebar.style.width = saved + 'px';
+
+    let startX = 0, startW = 0;
+    resizer.addEventListener('pointerdown', (e) => {
+      startX = e.clientX;
+      startW = sidebar.getBoundingClientRect().width;
+      resizer.setPointerCapture(e.pointerId);
+      document.body.classList.add('agent-resizing');
+      e.preventDefault();
+    });
+    resizer.addEventListener('pointermove', (e) => {
+      if (!document.body.classList.contains('agent-resizing')) return;
+      // 向左拖 = 变宽；限制在 [MIN, 视口 70%]
+      const w = Math.min(Math.max(startW + (startX - e.clientX), MIN),
+        Math.floor(window.innerWidth * 0.7));
+      sidebar.style.width = w + 'px';
+    });
+    const finish = (e) => {
+      if (!document.body.classList.contains('agent-resizing')) return;
+      document.body.classList.remove('agent-resizing');
+      try { resizer.releasePointerCapture(e.pointerId); } catch (ignored) { }
+      localStorage.setItem(KEY, String(Math.round(sidebar.getBoundingClientRect().width)));
+    };
+    resizer.addEventListener('pointerup', finish);
+    resizer.addEventListener('pointercancel', finish);
+  }
+
   // ---------- 引导态 ----------
 
   async function checkGate() {
@@ -570,6 +605,7 @@
 
   function init() {
     applyCollapsed(localStorage.getItem('tugline.agentCollapsed') === '1');
+    setupResizer();
 
     $('#agent-collapse').onclick = () => applyCollapsed(true);
     $('#agent-fab').onclick = () => applyCollapsed(false);

@@ -410,6 +410,16 @@ body {
 }
 body.agent-collapsed .agent-sidebar { display: none; }
 
+/* 拖拽调宽分割条 */
+.agent-resizer {
+  width: 6px; flex-shrink: 0; cursor: col-resize;
+  background: transparent; transition: background .15s;
+  touch-action: none;
+}
+.agent-resizer:hover, body.agent-resizing .agent-resizer { background: var(--primary-weak); }
+body.agent-collapsed .agent-resizer { display: none; }
+body.agent-resizing { cursor: col-resize; user-select: none; }
+
 .agent-head {
   display: flex; align-items: center; gap: 8px;
   padding: 10px 12px; border-bottom: 1px solid var(--line);

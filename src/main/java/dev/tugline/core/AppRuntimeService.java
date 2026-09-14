@@ -123,6 +123,7 @@ public class AppRuntimeService {
             if (!p.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)) {
                 p.descendants().forEach(ProcessHandle::destroyForcibly);
                 p.destroyForcibly();
+                p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS); // 等 SIGKILL 真正生效，不能杀完就走
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -133,16 +134,48 @@ public class AppRuntimeService {
     private boolean destroyHandleTree(ProcessHandle h) {
         h.descendants().forEach(ProcessHandle::destroy);
         h.destroy();
-        try {
-            Thread.sleep(3000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        waitForExit(h, 3000);
         if (h.isAlive()) {
             h.descendants().forEach(ProcessHandle::destroyForcibly);
             h.destroyForcibly();
+            waitForExit(h, 5000);
         }
         return true;
+    }
+
+    private void waitForExit(ProcessHandle h, long timeoutMs) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (h.isAlive() && System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
+    /** 等待端口释放：旧进程完全退出后再启动新进程，避免端口占用导致新进程起不来 */
+    public void awaitPortFree(int port, long timeoutMs) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline && !isPortFree(port)) {
+            try {
+                Thread.sleep(300);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
+    private boolean isPortFree(int port) {
+        try (java.net.Socket s = new java.net.Socket()) {
+            s.connect(new java.net.InetSocketAddress(
+                    java.net.InetAddress.getLoopbackAddress(), port), 300);
+            return false; // 连得上 = 还被占用
+        } catch (IOException e) {
+            return true; // 连不上 = 已释放
+        }
     }
 
     /** 进程是否仍在运行 */

@@ -149,6 +149,7 @@ public class PipelineService {
             begin(deploy);
             persist(run);
             appRuntime.stop(repo);
+            appRuntime.awaitPortFree(repo.getPort(), 10_000); // 等旧进程端口释放，避免新进程绑定失败
             Path deployLog = runLog(logBase, run, "deploy");
             RuntimeState st = appRuntime.start(repo, repoDir, artifact, commit, deployLog);
             store.setRuntime(repo.getId(), st);
@@ -204,6 +205,7 @@ public class PipelineService {
         BuildService.Artifact artifact = new BuildService.Artifact(
                 old.getArtifact(), old.getMainClass(), jar && buildService.isSpringBoot(repoDir));
         appRuntime.stop(repo);
+        appRuntime.awaitPortFree(repo.getPort(), 10_000); // 等旧进程端口释放，避免新进程绑定失败
         try {
             RuntimeState st = appRuntime.start(repo, repoDir, artifact, old.getCommit(),
                     appRuntime.appLogFile(repo.getId()));

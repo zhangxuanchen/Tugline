@@ -18,6 +18,10 @@ import java.util.Locale;
 @Service
 public class GitService {
 
+    /** clone/fetch 网络抖动自动重试次数（含首次）与间隔 */
+    private static final int GIT_ATTEMPTS = 3;
+    private static final long GIT_RETRY_DELAY_MS = 3000;
+
     private final TuglineProperties props;
 
     public GitService(TuglineProperties props) {
@@ -80,25 +84,85 @@ public class GitService {
     /** clone 或 pull 到 targetDir，返回当前 commit SHA */
     public String sync(Repo repo, Path targetDir, Path logFile) throws Exception {
         if (!Files.exists(targetDir.resolve(".git"))) {
-            if (Files.exists(targetDir)) {
-                deleteRecursively(targetDir);
-            }
-            Files.createDirectories(targetDir.getParent());
-            ProcessRunner.run(List.of(
-                            "git", "clone", "--branch", repo.getBranch(),
-                            "--single-branch", "--depth", "50", credUrl(repo),
-                            targetDir.toString()),
-                    null, logFile, gitTimeout(), null);
+            cloneWithRetry(repo, targetDir, logFile);
         } else {
             // 幂等拉取：fetch + 硬复位，避免本地脏状态
-            ProcessRunner.run(List.of("git", "remote", "set-url", "origin", credUrl(repo)),
+            fetchWithRetry(repo, targetDir, logFile);
+            int code = ProcessRunner.run(List.of("git", "reset", "--hard", "origin/" + repo.getBranch()),
                     targetDir, logFile, gitTimeout(), null);
-            ProcessRunner.run(List.of("git", "fetch", "origin", repo.getBranch(), "--depth", "50"),
-                    targetDir, logFile, gitTimeout(), null);
-            ProcessRunner.run(List.of("git", "reset", "--hard", "origin/" + repo.getBranch()),
-                    targetDir, logFile, gitTimeout(), null);
+            if (code != 0) {
+                throw new IllegalStateException("git reset 失败（退出码 " + code + "），详见拉取日志");
+            }
         }
         return currentCommit(targetDir, logFile);
+    }
+
+    /** clone 带重试：远端网络抖动（SSL EOF、超时、exec 失败等）自动重试，仍失败则抛出真实原因 */
+    private void cloneWithRetry(Repo repo, Path targetDir, Path logFile) throws Exception {
+        if (Files.exists(targetDir)) {
+            deleteRecursively(targetDir);
+        }
+        Files.createDirectories(targetDir.getParent());
+        String lastError = "";
+        for (int attempt = 1; attempt <= GIT_ATTEMPTS; attempt++) {
+            if (attempt > 1) {
+                ProcessRunner.appendLine(logFile, "[tugline] 拉取失败（" + lastError + "），"
+                        + (GIT_RETRY_DELAY_MS / 1000) + " 秒后重试（第 " + attempt + "/" + GIT_ATTEMPTS + " 次）");
+                Thread.sleep(GIT_RETRY_DELAY_MS);
+                // 清理上次失败残留，避免目标目录已存在导致 clone 二次失败
+                if (Files.exists(targetDir)) {
+                    deleteRecursively(targetDir);
+                }
+            }
+            try {
+                int code = ProcessRunner.run(List.of(
+                                "git", "clone", "--branch", repo.getBranch(),
+                                "--single-branch", "--depth", "50", credUrl(repo),
+                                targetDir.toString()),
+                        null, logFile, gitTimeout(), null);
+                if (code == 0) {
+                    return;
+                }
+                lastError = "退出码 " + code;
+            } catch (InterruptedException ie) {
+                throw ie;
+            } catch (Exception e) {
+                lastError = e.getMessage();
+            }
+        }
+        throw new IllegalStateException("git clone 失败（" + lastError + "，已重试 "
+                + (GIT_ATTEMPTS - 1) + " 次）：多为网络无法访问 Git 服务，详见拉取日志");
+    }
+
+    /** fetch 带重试：远端网络抖动（SSL EOF、超时、exec 失败等）自动重试，仍失败则抛出真实原因 */
+    private void fetchWithRetry(Repo repo, Path targetDir, Path logFile) throws Exception {
+        int code = ProcessRunner.run(List.of("git", "remote", "set-url", "origin", credUrl(repo)),
+                targetDir, logFile, gitTimeout(), null);
+        if (code != 0) {
+            throw new IllegalStateException("git remote set-url 失败（退出码 " + code + "）");
+        }
+        String lastError = "";
+        for (int attempt = 1; attempt <= GIT_ATTEMPTS; attempt++) {
+            if (attempt > 1) {
+                ProcessRunner.appendLine(logFile, "[tugline] 拉取失败（" + lastError + "），"
+                        + (GIT_RETRY_DELAY_MS / 1000) + " 秒后重试（第 " + attempt + "/" + GIT_ATTEMPTS + " 次）");
+                Thread.sleep(GIT_RETRY_DELAY_MS);
+            }
+            try {
+                code = ProcessRunner.run(List.of("git", "fetch", "origin", repo.getBranch(), "--depth", "50"),
+                        targetDir, logFile, gitTimeout(), null);
+                if (code == 0) {
+                    return;
+                }
+                lastError = "退出码 " + code;
+            } catch (InterruptedException ie) {
+                throw ie;
+            } catch (Exception e) {
+                lastError = e.getMessage();
+            }
+        }
+        throw new IllegalStateException("git fetch 失败（" + lastError + "，已重试 "
+                + (GIT_ATTEMPTS - 1) + " 次）：多为网络无法访问 Git 服务，详见拉取日志");
     }
 
     public String currentCommit(Path dir, Path logFile) throws Exception {

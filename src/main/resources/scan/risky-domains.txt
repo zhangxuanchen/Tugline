@@ -1,0 +1,48 @@
+# =============================================================
+# Tugline 资源安全监测 · 风险域名关键词（内置默认版）
+# - 每行一个关键词（子串匹配，小写比较），# 开头为注释
+# - 命中页面/脚本中的外链域名即判定违规并阻断流水线
+# - 自定义：在 data/scan/risky-domains.txt 中追加（与本文件合并生效）
+# =============================================================
+
+# ---- 涉赌域名关键词 ----
+casino
+bet365
+bwin
+sunbet
+betway
+188bet
+betvictor
+williamhill
+lebo
+bbin
+mg电子
+am Poker
+kok体育
+letou
+乐天堂
+申博
+太阳城
+威尼斯人
+金沙娱乐
+新葡京
+永利娱乐
+银河娱乐
+美高梅线上
+
+# ---- 涉黄域名关键词 ----
+porn
+xxx
+sexvideo
+adultsite
+javhd
+成人网
+
+# ---- 涉诈 / 钓鱼常见特征 ----
+phish
+fakebank
+verify-account
+account-verify
+wallet-connect-steal
+airdrop-claim
+free-eth-giveaway

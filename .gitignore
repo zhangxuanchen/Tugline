@@ -1,4 +1,12 @@
+# Tugline runtime data
+data/
+node_modules/
+
 target/
+.vscode/
+.idea/
+*.iml
+.DS_Store
 pom.xml.tag
 pom.xml.releaseBackup
 pom.xml.versionsBackup

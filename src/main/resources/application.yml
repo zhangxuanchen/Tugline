@@ -1,0 +1,42 @@
+server:
+  port: 7070
+
+spring:
+  application:
+    name: tugline
+  jackson:
+    default-property-inclusion: non_null
+  security:
+    filter:
+      dispatcher-types: request
+
+tugline:
+  data-dir: ./data
+  port-base: 9001
+  build-timeout-min: 15
+  git-timeout-min: 5
+  health-timeout-sec: 90
+  # 资源安全监测：拉取后/构建后/部署后三个闸口做内容合规扫描，违规阻断流水线
+  scan-enabled: ${TUGLINE_SCAN_ENABLED:true}
+  scan-max-file-kb: ${TUGLINE_SCAN_MAX_FILE_KB:2048}
+  scan-max-images: ${TUGLINE_SCAN_MAX_IMAGES:50}
+  scan-image-audit-key: ${TUGLINE_SCAN_IMAGE_AK:}
+  scan-image-audit-secret: ${TUGLINE_SCAN_IMAGE_SK:}
+  scan-image-audit-region: ${TUGLINE_SCAN_IMAGE_REGION:cn-shanghai}
+  auth:
+    username: ${TUGLINE_AUTH_USERNAME:admin}
+    password: ${TUGLINE_AUTH_PASSWORD:admin123}
+    jwt-secret: ${TUGLINE_JWT_SECRET:tugline-default-jwt-secret-change-me-in-production-0123456789}
+    ttl-hours: ${TUGLINE_AUTH_TTL_HOURS:72}
+  agent:
+    enabled: ${TUGLINE_AGENT_ENABLED:true}
+    provider: ${TUGLINE_AGENT_PROVIDER:dashscope}
+    dashscope-api-key: ${DASHSCOPE_API_KEY:}
+    dashscope-model: ${TUGLINE_AGENT_MODEL:qwen3-max}
+    openai-api-key: ${LLM_API_KEY:}
+    openai-model: ${LLM_MODEL:deepseek-chat}
+    openai-base-url: ${LLM_BASE_URL:https://api.deepseek.com}
+
+logging:
+  level:
+    dev.tugline: INFO

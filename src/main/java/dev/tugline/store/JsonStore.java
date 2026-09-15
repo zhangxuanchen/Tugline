@@ -274,18 +274,4 @@ public class JsonStore {
             lock.writeLock().unlock();
         }
     }
-
-    /** 服务重启后的进程状态恢复：清理已死亡进程的记录 */
-    public void sweepDeadRuntime() {
-        lock.writeLock().lock();
-        try {
-            boolean changed = runtime.entrySet().removeIf(e -> {
-                long pid = e.getValue().getPid();
-                return pid <= 0 || ProcessHandle.of(pid).isEmpty();
-            });
-            if (changed) save();
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
 }

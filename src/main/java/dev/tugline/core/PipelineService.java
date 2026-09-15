@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -56,13 +57,52 @@ public class PipelineService {
 
     @PostConstruct
     void init() {
-        // 服务重启后：清理已死亡进程的运行时记录，存活进程转回健康探测
-        store.sweepDeadRuntime();
+        // 服务重启后：把之前在运行的应用自动拉起。
+        // 手动 stop 会删除 runtime 记录，因此“有记录”即“重启前在运行”。
         for (Repo repo : store.listRepos()) {
             RuntimeState st = store.runtimeOf(repo.getId());
-            if (st != null) {
-                watchHealthAsync(repo);
+            if (st == null) {
+                continue;
             }
+            if (appRuntime.isAlive(st)) {
+                // 平台异常退出但子进程幸存：进程还在，只需恢复健康观测
+                watchHealthAsync(repo);
+            } else {
+                executor.submit(() -> recover(repo));
+            }
+        }
+    }
+
+    /** 用上次部署产物拉起重启前在运行的应用（不重新拉代码、不重新构建） */
+    private void recover(Repo repo) {
+        try {
+            Thread.sleep(3000); // 等平台自身完全就绪，避免与启动过程抢资源
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+        }
+        // 等待期间应用可能已被用户手动 stop 或删除（记录被清）
+        RuntimeState rec = store.runtimeOf(repo.getId());
+        if (rec == null) {
+            return;
+        }
+        try {
+            if (rec.getArtifact() == null || rec.getArtifact().isBlank()
+                    || !Files.exists(appRuntime.repoDir(repo).resolve(rec.getArtifact()).normalize())) {
+                // 产物已不存在：清掉陈旧记录，交由用户重新完整部署
+                store.removeRuntime(repo.getId());
+                log.warn("[Recover] 应用 {} 的部署产物已丢失，跳过自动恢复", repo.getName());
+                return;
+            }
+            restart(repo);
+            log.info("[Recover] 应用 {} 已自动恢复（使用上次部署产物 {}）", repo.getName(), rec.getArtifact());
+            ProcessRunner.appendLine(appRuntime.appLogFile(repo.getId()),
+                    "[tugline] 平台重启，应用已自动恢复（使用上次部署产物）");
+        } catch (Exception e) {
+            String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            log.warn("[Recover] 应用 {} 自动恢复失败: {}", repo.getName(), msg);
+            ProcessRunner.appendLine(appRuntime.appLogFile(repo.getId()),
+                    "[tugline] 平台重启自动恢复失败: " + msg + "，请手动部署");
         }
     }
 

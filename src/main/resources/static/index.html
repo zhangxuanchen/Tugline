@@ -257,6 +257,15 @@
         <span class="field-label">访问路径（应用首页不是根路径时填，如 /admin/index.html）</span>
         <input id="f-preview" placeholder="/"/>
       </label>
+      <label class="field">
+        <span class="field-label">环境变量（JSON 格式，部署时注入应用进程）</span>
+        <textarea id="f-env" rows="4" class="env-textarea" spellcheck="false"
+          placeholder='{"DB_PASSWORD": "xxx", "JWT_SECRET": "xxx", "ARK_API_KEY": "xxx"}'></textarea>
+      </label>
+      <label class="field">
+        <span class="field-label">启动前脚本（可选，如拉起依赖容器；失败则不启动应用）</span>
+        <input id="f-prestart" placeholder="docker compose up -d --wait mysql"/>
+      </label>
       <div class="modal-tip">添加成功后，Tugline 会自动校验仓库与分支可达性。推送代码或点击「一键部署」即可发版。</div>
     </div>
     <div class="modal-foot">

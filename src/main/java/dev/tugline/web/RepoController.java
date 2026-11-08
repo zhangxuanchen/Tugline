@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -52,6 +53,8 @@ public class RepoController {
         private String healthPath = "";
         private String previewPath = "";
         private Boolean autoDeploy = true;
+        private Map<String, String> env;
+        private String preStartCommand;
 
         public String getUrl() { return url; }
         public void setUrl(String url) { this.url = url; }
@@ -69,9 +72,13 @@ public class RepoController {
         public void setPreviewPath(String previewPath) { this.previewPath = previewPath; }
         public Boolean getAutoDeploy() { return autoDeploy; }
         public void setAutoDeploy(Boolean autoDeploy) { this.autoDeploy = autoDeploy; }
+        public Map<String, String> getEnv() { return env; }
+        public void setEnv(Map<String, String> env) { this.env = env; }
+        public String getPreStartCommand() { return preStartCommand; }
+        public void setPreStartCommand(String preStartCommand) { this.preStartCommand = preStartCommand; }
     }
 
-    /** 仓库配置更新（部分字段，null 不覆盖） */
+    /** 仓库配置更新（部分字段，null 不覆盖；env 传 null 不覆盖，传空 Map 清空） */
     public static class UpdateRepoRequest {
         private String branch;
         private Integer port;
@@ -80,6 +87,8 @@ public class RepoController {
         private String secret;
         private String token;
         private Boolean autoDeploy;
+        private Map<String, String> env;
+        private String preStartCommand;
 
         public String getBranch() { return branch; }
         public void setBranch(String branch) { this.branch = branch; }
@@ -95,6 +104,10 @@ public class RepoController {
         public void setToken(String token) { this.token = token; }
         public Boolean getAutoDeploy() { return autoDeploy; }
         public void setAutoDeploy(Boolean autoDeploy) { this.autoDeploy = autoDeploy; }
+        public Map<String, String> getEnv() { return env; }
+        public void setEnv(Map<String, String> env) { this.env = env; }
+        public String getPreStartCommand() { return preStartCommand; }
+        public void setPreStartCommand(String preStartCommand) { this.preStartCommand = preStartCommand; }
     }
 
     /** 拉取远端分支列表（添加仓库时的分支下拉数据源） */
@@ -160,6 +173,9 @@ public class RepoController {
         repo.setPort(req.getPort() != null && req.getPort() > 0
                 ? req.getPort() : pipeline.allocatePort(store.usedPorts()));
         repo.setCreatedAt(System.currentTimeMillis());
+        repo.setEnv(normalizeEnv(req.getEnv()));
+        repo.setPreStartCommand(req.getPreStartCommand() == null
+                ? "" : req.getPreStartCommand().trim());
 
         try {
             gitService.validate(repo);
@@ -238,6 +254,12 @@ public class RepoController {
         if (req.getAutoDeploy() != null) {
             repo.setAutoDeploy(req.getAutoDeploy());
         }
+        if (req.getEnv() != null) {
+            repo.setEnv(normalizeEnv(req.getEnv()));
+        }
+        if (req.getPreStartCommand() != null) {
+            repo.setPreStartCommand(req.getPreStartCommand().trim());
+        }
         store.updateRepo(repo);
         return repo.toView(store.runtimeOf(id), store.lastRunOf(id).orElse(null));
     }
@@ -257,5 +279,21 @@ public class RepoController {
             name = name.substring(0, name.length() - ".git".length());
         }
         return name;
+    }
+
+    /** 清洗 env：去空 key、trim 值，保持插入顺序 */
+    private static Map<String, String> normalizeEnv(Map<String, String> raw) {
+        if (raw == null || raw.isEmpty()) {
+            return new LinkedHashMap<>();
+        }
+        Map<String, String> result = new LinkedHashMap<>();
+        for (Map.Entry<String, String> e : raw.entrySet()) {
+            String k = e.getKey() == null ? "" : e.getKey().trim();
+            if (k.isEmpty()) {
+                continue;
+            }
+            result.put(k, e.getValue() == null ? "" : e.getValue().trim());
+        }
+        return result;
     }
 }

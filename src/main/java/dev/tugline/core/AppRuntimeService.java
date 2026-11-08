@@ -10,7 +10,9 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -73,9 +75,18 @@ public class AppRuntimeService {
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.directory(repoDir.toFile());
-        pb.environment().put("PORT", String.valueOf(port));
-        pb.environment().put("TUGLINE_DEPLOYED_AT", String.valueOf(System.currentTimeMillis()));
-        pb.environment().put("TUGLINE_COMMIT", commit == null ? "" : commit);
+        Map<String, String> extraEnv = new LinkedHashMap<>();
+        extraEnv.put("PORT", String.valueOf(port));
+        extraEnv.put("TUGLINE_DEPLOYED_AT", String.valueOf(System.currentTimeMillis()));
+        extraEnv.put("TUGLINE_COMMIT", commit == null ? "" : commit);
+        // 仓库级别环境变量（密钥、DB 密码等），由 RepoController 校验过
+        Map<String, String> repoEnv = repo.getEnv();
+        if (repoEnv != null && !repoEnv.isEmpty()) {
+            extraEnv.putAll(repoEnv);
+        }
+        // 先跑准备脚本（如拉起 MySQL），失败则不启动应用
+        runPreStart(repo, repoDir, appLog, extraEnv);
+        pb.environment().putAll(extraEnv);
         pb.redirectErrorStream(true);
         pb.redirectOutput(ProcessBuilder.Redirect.appendTo(appLog.toFile()));
         Process p = pb.start();
@@ -90,6 +101,33 @@ public class AppRuntimeService {
         st.setHealth(RuntimeState.HEALTH_STARTING);
         st.setCommit(commit == null ? "" : commit);
         return st;
+    }
+
+    /**
+     * 执行启动前脚本（仓库根目录、注入与主进程相同的环境变量）。
+     * 非 0 退出或超时直接抛错，避免带着缺失依赖硬启动。
+     */
+    private void runPreStart(Repo repo, Path repoDir, Path appLog,
+                             Map<String, String> env) throws IOException {
+        String script = repo.getPreStartCommand();
+        if (script == null || script.isBlank()) {
+            return;
+        }
+        ProcessRunner.appendLine(appLog, "[tugline] ── 启动前脚本 ──");
+        int code;
+        try {
+            code = ProcessRunner.run(List.of("/bin/sh", "-c", script), repoDir, appLog,
+                    Duration.ofSeconds(300), env);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("启动前脚本被中断", e);
+        } catch (Exception e) {
+            throw new IOException("启动前脚本执行失败: " + e.getMessage(), e);
+        }
+        if (code != 0) {
+            throw new IOException("启动前脚本失败（退出码 " + code + "），详见运行日志");
+        }
+        ProcessRunner.appendLine(appLog, "[tugline] 启动前脚本完成");
     }
 
     /** 停止受管进程（进程树 TERM → 3s → KILL）。返回是否确实停了东西 */

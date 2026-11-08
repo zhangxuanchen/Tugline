@@ -488,7 +488,7 @@
 
   function closeAddRepo() {
     $('#modal-mask').style.display = 'none';
-    ['f-url', 'f-token', 'f-secret', 'f-health', 'f-preview', 'f-port'].forEach((id) => { $('#' + id).value = ''; });
+    ['f-url', 'f-token', 'f-secret', 'f-health', 'f-preview', 'f-port', 'f-env', 'f-prestart'].forEach((id) => { $('#' + id).value = ''; });
     resetBranchSelect();
   }
 
@@ -499,18 +499,44 @@
     const btn = $('#f-submit');
     btn.disabled = true;
     btn.textContent = '校验中…';
+
+    // 解析 env JSON
+    let env = undefined;
+    const envRaw = $('#f-env').value.trim();
+    if (envRaw) {
+      try {
+        const parsed = JSON.parse(envRaw);
+        if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+          toast('环境变量必须是 JSON 对象格式', true);
+          btn.disabled = false; btn.textContent = '添加';
+          return;
+        }
+        env = {};
+        for (const [k, v] of Object.entries(parsed)) {
+          env[String(k)] = String(v);
+        }
+      } catch (e) {
+        toast('环境变量 JSON 解析失败：' + e.message, true);
+        btn.disabled = false; btn.textContent = '添加';
+        return;
+      }
+    }
+
     try {
+      const body = {
+        url,
+        branch: $('#f-branch').value.trim() || 'main',
+        token: $('#f-token').value.trim(),
+        secret: $('#f-secret').value.trim(),
+        healthPath: $('#f-health').value.trim(),
+        previewPath: $('#f-preview').value.trim(),
+        port: Number.isFinite(port) && port > 0 ? port : null,
+        preStartCommand: $('#f-prestart').value.trim(),
+      };
+      if (env !== undefined) body.env = env;
       const repo = await api('/api/repos', {
         method: 'POST',
-        body: JSON.stringify({
-          url,
-          branch: $('#f-branch').value.trim() || 'main',
-          token: $('#f-token').value.trim(),
-          secret: $('#f-secret').value.trim(),
-          healthPath: $('#f-health').value.trim(),
-          previewPath: $('#f-preview').value.trim(),
-          port: Number.isFinite(port) && port > 0 ? port : null,
-        }),
+        body: JSON.stringify(body),
       });
       closeAddRepo();
       toast(`${repo.name} 添加成功，点击「一键部署」发版`);

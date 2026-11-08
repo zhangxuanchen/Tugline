@@ -170,6 +170,10 @@ public class PipelineService {
                 repo.setName(meta.displayName());
                 repoChanged = true;
             }
+            if (isBlank(repo.getPreStartCommand()) && meta.preStart() != null) {
+                repo.setPreStartCommand(meta.preStart());
+                repoChanged = true;
+            }
             if (repoChanged) {
                 store.updateRepo(repo);
             }

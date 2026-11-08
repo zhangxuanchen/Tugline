@@ -28,6 +28,8 @@ FETCH 拉取代码 → BUILD 构建(Maven/Gradle) → DEPLOY 部署(java -jar) �
 在 Web 控制台里点「部署」就能完成从代码到在线服务的全过程；也可以直接对内置 AI 助手说
 「启动 https://github.com/xxx/yyy」「关掉 citadel」，由助手调用平台工具代你执行。
 
+<img width="1920" height="888" alt="image" src="https://github.com/user-attachments/assets/58fba65f-fdfc-4099-b7f0-6fba6639ee2b" />
+
 ## 功能特性
 
 ### 流水线
